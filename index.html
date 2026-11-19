@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fandom Live</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#101014;color:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+.app{max-width:560px;margin:auto;min-height:100vh;background:#18181f}
+header{padding:16px 18px;border-bottom:1px solid #333;display:flex;justify-content:space-between}
+.logo{font-weight:800}.live{color:#ff5368;font-size:12px}.viewer{font-size:12px;color:#aaa}
+.stage{height:155px;background:linear-gradient(135deg,#302b42,#171722);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px}
+.avatar{width:58px;height:58px;border-radius:50%;background:#625477;display:grid;place-items:center;font-size:27px}
+.stage small{color:#aaa}.chat-title{padding:13px 17px;color:#aaa;font-size:12px}
+.chat{height:calc(100vh - 360px);min-height:300px;overflow:auto;padding:0 16px 16px}
+.comment{padding:7px 0;display:flex;gap:9px;line-height:1.45;font-size:14px;animation:in .2s}
+@keyframes in{from{opacity:0;transform:translateY(4px)}to{opacity:1}}
+.name{color:#ad9bdc;font-weight:650;white-space:nowrap}.msg{overflow-wrap:anywhere}
+.system{color:#777;font-size:12px;padding:8px 0}
+.controls{position:sticky;bottom:0;background:#202029;border-top:1px solid #383843;padding:13px}
+.status{font-size:12px;color:#bbb;margin-bottom:10px;line-height:1.5}
+.actions,.inputrow{display:flex;gap:8px}
+button{border:0;border-radius:10px;padding:12px 15px;background:#66558b;color:white;font-weight:650}
+button:disabled{opacity:.4}#stop{background:#454550}
+input{min-width:0;flex:1;background:#30303a;border:0;border-radius:9px;padding:12px;color:white;font-size:14px}
+#send{background:#444454}.hint{font-size:11px;color:#777;margin-top:9px}
+</style>
+</head>
+<body>
+<div class="app">
+<header><div><span class="logo">FANDOM LIVE</span> <span class="live">● LIVE</span></div><div class="viewer" id="viewers">시청자 1,284명</div></header>
+<section class="stage"><div class="avatar">♡</div><strong>오늘도 놀러와줘서 고마워요</strong><small>LIVE STREAMING</small></section>
+<div class="chat-title">실시간 채팅</div>
+<div class="chat" id="chat"></div>
+<section class="controls">
+ <div class="status" id="status">방송 시작을 누르고 마이크를 허용해 줘.</div>
+ <div class="actions"><button id="start">● 방송 시작</button><button id="stop" disabled>방송 종료</button></div>
+ <div class="inputrow" style="margin-top:10px"><input id="manual" placeholder="직접 입력해도 돼"><button id="send">전송</button></div>
+ <div class="hint">음성은 짧은 구간으로 나눠 텍스트로 변환돼. 마이크 녹음은 방송 종료 시 멈춰.</div>
+</section>
+</div>
+<script>
+const chat=document.getElementById('chat'), statusEl=document.getElementById('status');
+const startBtn=document.getElementById('start'), stopBtn=document.getElementById('stop');
+const names=['복숭아','말랑이','성실한감자','오늘도출석','고양이집사','하루','ㅇㅇ','포도','익명의팬','잠만보','물만두','행복한오리','초코우유','별사탕'];
+const reactions=['ㅋㅋㅋㅋㅋㅋ','아 진짜 웃겨','아니 너무 귀여운데','헐ㅋㅋㅋㅋ','그건 좀 궁금하다','오오오','아 맞아 나도 그생각함','갑자기?ㅋㅋㅋ','계속 얘기해줘','오늘 텐션 좋다ㅋㅋ','뭐야 귀여워'];
+const casual=['오늘 저녁 뭐먹지 추천좀','다들 요즘 뭐 듣고 다녀?','나 방금 과제 끝냄 살았다','오늘 날씨 진짜 이상하지 않아?','최근에 본 영화 있어??','요즘 재밌는 드라마 없나','아 배고파','오늘 옷 예쁘다','다들 아직 안 자고 뭐해','오늘 하루 어땠어','요즘 사고 싶은 거 있어?','갑자기 여행 가고싶다','ㅋㅋㅋㅋ 여기 채팅 왜케 웃김','나 방금 들어왔는데 무슨 얘기중이야'];
+const topicComments={
+ '영화':['무슨 영화 봤어??','재밌었어? 나도 볼까','장르 뭐야 스포 없이 알려줘'],
+ '음식':['뭐 먹었는데??','맛있었겠다ㅠㅠ','갑자기 배고파짐','그거 어디서 먹었어?'],
+ '음악':['무슨 노래 듣고 있어?','플리 공유해줘','요즘 꽂힌 노래 있어??'],
+ '패션':['오늘 착장 궁금해','그거 무슨 브랜드야?','색 조합 예쁘겠다'],
+ '여행':['어디 가고 싶어??','여행 가면 뭐 하는 거 좋아해?','나도 갑자기 떠나고 싶어짐'],
+ '학교':['과제 화이팅ㅠㅠ','오늘도 고생했네','무슨 수업이야?'],
+ '일상':['오늘 무슨 일 있었어?','그랬구나ㅋㅋㅋ','아 그런 날 있지']
+};
+const multilingual=['so cute haha','what are you doing today?','かわいいㅋㅋ','今日も来たよ！','哈哈哈哈 好可爱','今天心情怎么样？'];
+let history=[], running=false, stream=null, recorder=null, backgroundTimer=null, sendQueue=Promise.resolve();
+function pick(a){return a[Math.floor(Math.random()*a.length)]}
+function imperfect(s){if(Math.random()>.22)return s;return s.replace('있어','잇어').replace('너무','넘').replace('오늘','오눌').replace('ㅋㅋㅋㅋ','ㅋㅋㅋ')}
+function addComment(msg,name){
+ const row=document.createElement('div');row.className='comment';
+ const n=document.createElement('span');n.className='name';n.textContent=name||pick(names);
+ const m=document.createElement('span');m.className='msg';m.textContent=imperfect(msg);
+ row.append(n,m);chat.append(row);chat.scrollTop=chat.scrollHeight;
+ if(chat.children.length>100)chat.firstElementChild.remove();
+}
+function system(msg){const e=document.createElement('div');e.className='system';e.textContent=msg;chat.append(e);chat.scrollTop=chat.scrollHeight}
+function topicOf(t){
+ const p=[['영화',/영화|극장|배우|시네마|무비/],['음식',/밥|먹|음식|배고|마라탕|국밥|샤브|면|커피|디저트/],['음악',/노래|음악|가수|앨범|플리|콘서트/],['패션',/옷|패션|치마|바지|코디|가방|신발|디자인/],['여행',/여행|일본|도쿄|파리|뉴욕|비행기|호텔/],['학교',/학교|수업|과제|시험|교수|전공/]];
+ for(const [k,r] of p)if(r.test(t))return k;return '일상';
+}
+function onTranscript(t){
+ t=t.trim();if(!t)return;
+ if(history.some(x=>x===t))return;
+ history.push(t);if(history.length>35)history.shift();
+ const topic=topicOf(t);
+ if(Math.random()<.7)setTimeout(()=>addComment(pick(topicComments[topic])),500+Math.random()*1600);
+ if(Math.random()<.3)setTimeout(()=>addComment(pick(reactions)),1400+Math.random()*2400);
+ if(Math.random()<.12)setTimeout(()=>addComment(pick(multilingual)),1000+Math.random()*2500);
+ if(history.length>=3&&Math.random()<.15)setTimeout(()=>addComment('아까 얘기한 것도 계속 생각남ㅋㅋ'),2400);
+}
+function background(){
+ if(!running)return;
+ const r=Math.random();
+ if(r<.62)addComment(pick(casual));else if(r<.84)addComment(pick(reactions));else if(r<.94)addComment(pick(multilingual));
+ backgroundTimer=setTimeout(background,1800+Math.random()*6500);
+}
+async function uploadChunk(blob){
+ if(!blob||blob.size<1200)return;
+ const fd=new FormData();fd.append('file',blob,blob.type.includes('mp4')?'speech.mp4':'speech.webm');
+ try{
+  const res=await fetch('/transcribe',{method:'POST',body:fd});
+  if(!res.ok){const e=await res.json().catch(()=>({}));throw new Error(e.detail||'전사 서버 오류');}
+  const data=await res.json();if(data.text)onTranscript(data.text);
+ }catch(e){statusEl.textContent='음성 변환 중 오류: '+e.message+' · 서버 연결을 확인해 줘.';}
+}
+async function start(){
+ try{
+  if(!navigator.mediaDevices?.getUserMedia)throw new Error('이 브라우저에서 마이크 녹음을 지원하지 않아.');
+  stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  const options={};
+  if(MediaRecorder.isTypeSupported('audio/mp4'))options.mimeType='audio/mp4';
+  else if(MediaRecorder.isTypeSupported('audio/webm;codecs=opus'))options.mimeType='audio/webm;codecs=opus';
+  recorder=new MediaRecorder(stream,options);
+  recorder.ondataavailable=e=>{if(e.data&&e.data.size)sendQueue=sendQueue.then(()=>uploadChunk(e.data));};
+  recorder.onerror=()=>statusEl.textContent='녹음 오류가 발생했어. 다시 시작해 줘.';
+  recorder.start(6000);
+  running=true;startBtn.disabled=true;stopBtn.disabled=false;
+  statusEl.textContent='마이크 연결됨. 편하게 이야기해 줘!';
+  system('방송이 시작됐어요 ♡');background();
+ }catch(e){statusEl.textContent='마이크를 열지 못했어: '+e.message;stopTracks();}
+}
+function stopTracks(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}}
+async function stop(){
+ running=false;clearTimeout(backgroundTimer);
+ if(recorder&&recorder.state!=='inactive')recorder.stop();
+ stopTracks();startBtn.disabled=false;stopBtn.disabled=true;
+ await sendQueue;statusEl.textContent='방송이 종료됐어.';
+}
+startBtn.onclick=start;stopBtn.onclick=stop;
+function sendManual(){
+ const i=document.getElementById('manual'),t=i.value.trim();
+ if(!t)return;
+ addComment(t,'나');                 // 내가 보낸 말도 채팅창에 표시
+ i.value='';
+ onTranscript(t);                  // 팬들의 반응 생성
+}
+document.getElementById('send').onclick=sendManual;
+document.getElementById('manual').addEventListener('keydown',e=>{if(e.key==='Enter')sendManual()});
+setInterval(()=>document.getElementById('viewers').textContent='시청자 '+(1100+Math.floor(Math.random()*500)).toLocaleString()+'명',5000);
+system('팬들이 입장했어요. 방송을 시작해 보세요 ♡');
+</script>
+</body></html>
